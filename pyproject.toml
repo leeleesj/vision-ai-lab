@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "vision-ai-lab"
+version = "0.1.0"
+description = ""
+authors = ["sangju.lee <sjleee.dev@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+opencv-python = "^4.10.0.84"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
