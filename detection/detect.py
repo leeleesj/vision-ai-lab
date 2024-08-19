@@ -9,13 +9,39 @@ from ultralytics import YOLO
 
 def load_model(model_path):
     if model_path.endswith('.pt'):
-        return YOLO(model_path), 'torch'
+        model = YOLO(model_path)
+        return model, 'torch'
     elif model_path.endswith('.mlmodel'):
-        return ct.models.MLModel(model_path), 'mlmodel'
+        model = ct.models.MLModel(model_path)
+        return model, 'mlmodel'
     elif model_path.endswith('.tflite'):
-        return tf.lite.Interpreter(model_path=model_path), 'tflite'
+        model = tf.lite.Interpreter(model_path=model_path)
+        return model, 'tflite'
     else:
         raise ValueError("Unsupported model format. Use .pt, .mlmodel, .tflite")
+
+
+def get_model_info(model, model_type):
+    info = f"Model Type: {model_type}\n"
+
+    if model_type == 'torch':
+        info += f"Model Name: {model.name}\n"
+        info += f"Model Task: {model.task}\n"
+        info += f"Model Stride: {model.stride}\n"
+    elif model_type == 'mlmodel':
+        info += f"Model Description: {model.get_spec().description}\n"
+        info += f"Model Version: {model.get_spec().version}\n"
+    elif model_type == 'tflite':
+        model.allocate_tensors()
+        input_details = model.get_input_details()
+        output_details = model.get_output_details()
+        info += f"Input Shape: {input_details[0]['shape']}\n"
+        info += f"Input Type: {input_details[0]['dtype']}\n"
+        info += f"Output Shape: {output_details[0]['shape']}\n"
+        info += f"Output Type: {output_details[0]['dtype']}\n"
+
+    return info
+
 
 def process_image(image_path, model, model_type):
     try:
@@ -27,8 +53,6 @@ def process_image(image_path, model, model_type):
             boxes = results[0].boxes
             if len(boxes) == 0:
                 raise ValueError("No object detected")
-
-            # Get the box with the highest confidence
             best_box = boxes[boxes.conf.argmax()]
             x1, y1, x2, y2 = best_box.xyxy[0]
             return (int(x1), int(y1), int(x2), int(y2))
@@ -41,11 +65,33 @@ def process_image(image_path, model, model_type):
             model.allocate_tensors()
             input_details = model.get_input_details()
             output_details = model.get_output_details()
-            resized_img = cv2.resize(img_array, (320, 320))
-            input_data = np.expand_dims(resized_img, axis=0).astype(np.float32)
+
+            input_shape = input_details[0]['shape']
+            input_dtype = input_details[0]['dtype']
+
+            resized_img = cv2.resize(img_array, (input_shape[1], input_shape[2]))
+
+            if input_dtype == np.float32:
+                input_data = resized_img.astype(np.float32) / 255.0
+            elif input_dtype == np.uint8:
+                input_data = resized_img.astype(np.uint8)
+            else:
+                raise ValueError(f"Unsupported input data type: {input_dtype}")
+
+            input_data = np.expand_dims(input_data, axis=0)
+
             model.set_tensor(input_details[0]['index'], input_data)
             model.invoke()
-            coordinates = model.get_tensor(output_details[0]['index'])[0]
+
+            output_data = model.get_tensor(output_details[0]['index'])[0]
+
+            best_detection = output_data[np.argmax(output_data[:, 4])]
+            y1, x1, y2, x2 = best_detection[:4]
+
+            height, width = img_array.shape[:2]
+            x1, y1, x2, y2 = x1 * width, y1 * height, x2 * width, y2 * height
+
+            return (int(x1), int(y1), int(x2), int(y2))
 
         if model_type in ['mlmodel', 'tflite']:
             if len(coordinates) == 0:
@@ -62,12 +108,19 @@ def process_image(image_path, model, model_type):
     except Exception as e:
         raise Exception(f"Error processing image: {str(e)}")
 
+
 def draw_bbox(image_path, bbox):
     img = cv2.imread(image_path)
     cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
     return img
 
+
 def process_directory(input_dir, output_dir, model, model_type):
+    model_info = get_model_info(model, model_type)
+    print("Model Information:")
+    print(model_info)
+    print("Processing images...")
+
     for root, dirs, files in os.walk(input_dir):
         for file in files:
             if file.lower().endswith(('.png', '.jpg', '.jpeg')):
@@ -87,21 +140,17 @@ def process_directory(input_dir, output_dir, model, model_type):
                     print(f"Failed to process {input_path}: {str(e)}")
                     continue
 
+
 def main():
     parser = argparse.ArgumentParser(description='Object Detection')
-    parser.add_argument('input_dir', help='Input directory containing images')
-    parser.add_argument('output_dir', help='Output directory for processed images')
+    parser.add_argument('--input_dir', required=True, help='Input directory containing images')
+    parser.add_argument('--output_dir', required=True, help='Output directory for processed images')
     parser.add_argument('--model', required=True, help='Path to the model file (.pt, .mlmodel, or .tflite)')
     args = parser.parse_args()
 
     model, model_type = load_model(args.model)
     process_directory(args.input_dir, args.output_dir, model, model_type)
 
+
 if __name__ == '__main__':
     main()
-
-'''
-    python object_detection.py path/to/your/input_dataset path/to/your/output_dataset --model path/to/your/model.pt
-    python object_detection.py path/to/your/input_dataset path/to/your/output_dataset --model path/to/your/model.mlmodel
-    python object_detection.py path/to/your/input_dataset path/to/your/output_dataset --model path/to/your/model.tflite
-'''
