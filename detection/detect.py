@@ -5,6 +5,7 @@ import numpy as np
 import coremltools as ct
 import tensorflow as tf
 from PIL import Image
+from torch.optim.optimizer import required
 from ultralytics import YOLO
 
 def load_model(model_path):
@@ -20,27 +21,27 @@ def load_model(model_path):
     else:
         raise ValueError("Unsupported model format. Use .pt, .mlmodel, .tflite")
 
-
-def get_model_info(model, model_type):
-    info = f"Model Type: {model_type}\n"
-
-    if model_type == 'torch':
-        info += f"Model Name: {model.name}\n"
-        info += f"Model Task: {model.task}\n"
-        info += f"Model Stride: {model.stride}\n"
-    elif model_type == 'mlmodel':
-        info += f"Model Description: {model.get_spec().description}\n"
-        info += f"Model Version: {model.get_spec().version}\n"
-    elif model_type == 'tflite':
-        model.allocate_tensors()
-        input_details = model.get_input_details()
-        output_details = model.get_output_details()
-        info += f"Input Shape: {input_details[0]['shape']}\n"
-        info += f"Input Type: {input_details[0]['dtype']}\n"
-        info += f"Output Shape: {output_details[0]['shape']}\n"
-        info += f"Output Type: {output_details[0]['dtype']}\n"
-
-    return info
+#
+# def get_model_info(model, model_type):
+#     info = f"Model Type: {model_type}\n"
+#
+#     if model_type == 'torch':
+#         info += f"Model Name: {model.name}\n"
+#         info += f"Model Task: {model.task}\n"
+#         info += f"Model Stride: {model.stride}\n"
+#     elif model_type == 'mlmodel':
+#         info += f"Model Description: {model.get_spec().description}\n"
+#         info += f"Model Version: {model.get_spec().version}\n"
+#     elif model_type == 'tflite':
+#         model.allocate_tensors()
+#         input_details = model.get_input_details()
+#         output_details = model.get_output_details()
+#         info += f"Input Shape: {input_details[0]['shape']}\n"
+#         info += f"Input Type: {input_details[0]['dtype']}\n"
+#         info += f"Output Shape: {output_details[0]['shape']}\n"
+#         info += f"Output Type: {output_details[0]['dtype']}\n"
+#
+#     return info
 
 
 def process_image(image_path, model, model_type):
@@ -109,17 +110,22 @@ def process_image(image_path, model, model_type):
         raise Exception(f"Error processing image: {str(e)}")
 
 
+def crop_image(image_path, bbox):
+    img = Image.open(image_path)
+    return img.crop(bbox)
+
+
 def draw_bbox(image_path, bbox):
     img = cv2.imread(image_path)
     cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
     return img
 
 
-def process_directory(input_dir, output_dir, model, model_type):
-    model_info = get_model_info(model, model_type)
-    print("Model Information:")
-    print(model_info)
-    print("Processing images...")
+def process_directory(input_dir, output_dir, model, model_type, mode):
+    # model_info = get_model_info(model, model_type)
+    # print("Model Information:")
+    # print(model_info)
+    # print("Processing images...")
 
     for root, dirs, files in os.walk(input_dir):
         for file in files:
@@ -132,9 +138,12 @@ def process_directory(input_dir, output_dir, model, model_type):
                 try:
                     bbox = process_image(input_path, model, model_type)
 
-                    img_with_bbox = draw_bbox(input_path, bbox)
-                    cv2.imwrite(output_path, img_with_bbox)
-
+                    if mode == 'crop':
+                        cropped_img = crop_image(input_path, bbox)
+                        cropped_img.save(output_path)
+                    elif mode == 'draw':
+                        img_with_bbox = draw_bbox(input_path, bbox)
+                        cv2.imwrite(output_path, img_with_bbox)
                     print(f"Processed: {input_path}")
                 except Exception as e:
                     print(f"Failed to process {input_path}: {str(e)}")
@@ -146,11 +155,17 @@ def main():
     parser.add_argument('--input_dir', required=True, help='Input directory containing images')
     parser.add_argument('--output_dir', required=True, help='Output directory for processed images')
     parser.add_argument('--model', required=True, help='Path to the model file (.pt, .mlmodel, or .tflite)')
+    parser.add_argument('--mode', choices=['crop', 'draw'], required=True, help='Processing mode: crop or draw')
     args = parser.parse_args()
 
     model, model_type = load_model(args.model)
-    process_directory(args.input_dir, args.output_dir, model, model_type)
+    process_directory(args.input_dir, args.output_dir, model, model_type, args.mode)
 
 
 if __name__ == '__main__':
     main()
+
+    '''
+        python detection/detect.py path/to/your/input/datatset path/to/your/output/datatset --model path/to/your/model.mlmodel --mode crop
+        python detection/detect.py path/to/your/input/datatset path/to/your/output/datatset --model path/to/your/model.tflite --mode draw
+    '''
