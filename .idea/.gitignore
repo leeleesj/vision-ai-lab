@@ -1,11 +1,5 @@
-# Default ignored files
-/shelf/
-/workspace.xml
-# Editor-based HTTP Client requests
-/httpRequests/
-# Datasource local storage ignored files
-/dataSources/
-/dataSources.local.xml
+# Created by https://www.toptal.com/developers/gitignore/api/python,pycharm,macos
+# Edit at https://www.toptal.com/developers/gitignore?templates=python,pycharm,macos
 
 ### macOS ###
 # General
@@ -324,3 +318,5 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
+
+# End of https://www.toptal.com/developers/gitignore/api/python,pycharm,macos
