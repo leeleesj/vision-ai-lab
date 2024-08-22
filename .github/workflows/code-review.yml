@@ -1,24 +1,20 @@
-name: Code Review GPT
+name: Code Review From ChatGPT
+
+permissions:
+  contents: read
+  pull-requests: write
 
 on:
   pull_request:
-    branches: [main]
-
-permissions:
-  pull-requests: write
-  contents: read
+    types: [opened, synchronize]
 
 jobs:
-  run_code_review:
+  code-review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Code Review GPT
-        uses: mattzcarey/code-review-gpt@v0.1.9
-        with:
+      - uses: anc95/ChatGPT-CodeReview@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          MODEL: 'gpt-3.5-turbo'
-          GITHUB_TOKEN: ${{ github.token }}
+          LANGUAGE: Korean
+          MODEL: gpt-3.5-turbo
