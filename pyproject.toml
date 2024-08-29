@@ -12,6 +12,9 @@ coremltools = "^7.2"
 tensorflow = "^2.17.0"
 pillow = "^10.4.0"
 ultralytics = "^8.2.75"
+google-generativeai = "^0.7.2"
+openai = "^1.42.0"
+scikit-learn = "^1.5.1"
 
 
 [build-system]
